@@ -1,0 +1,37 @@
+{
+  "name": "@agent-killswitch/shared-types",
+  "version": "0.2.0",
+  "description": "Shared TypeScript contracts for Agent Kill Switch (SDK and apps).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LoopVerses/Kill-Switch-SDK-Agent.git",
+    "directory": "packages/shared-types"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "lint": "node -e \"process.exit(0)\"",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist .turbo",
+    "test": "node -e \"process.exit(0)\""
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "typescript": "^5.6.3"
+  }
+}

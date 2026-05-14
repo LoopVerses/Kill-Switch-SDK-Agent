@@ -1,0 +1,16 @@
+{
+  "name": "kill-switch-sdk-agent",
+  "private": true,
+  "description": "Kill Switch SDK Agent — public Node.js SDK for the Agent Kill Switch control plane",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.10.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @agent-killswitch/shared-types build && pnpm --filter @agent-killswitch/sdk-node build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm --filter @agent-killswitch/sdk-node test",
+    "lint": "pnpm -r run lint"
+  }
+}
