@@ -2,48 +2,100 @@
 
 # Agent Kill Switch — Node.js SDK
 
-[![npm version](https://img.shields.io/badge/npm-%40agent--killswitch%2Fsdk--node-0.3.0-CB3837?logo=npm)](https://www.npmjs.com/package/@agent-killswitch/sdk-node)
+[![npm](https://img.shields.io/badge/npm-%40agent--killswitch%2Fsdk--node-0.3.0-CB3837?logo=npm)](https://www.npmjs.com/package/@agent-killswitch/sdk-node)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/LoopVerses/Kill-Switch-SDK-Agent/blob/main/LICENSE)
 [![Node.js](https://img.shields.io/node/v/@agent-killswitch/sdk-node?color=339933&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![CI](https://img.shields.io/github/actions/workflow/status/LoopVerses/Kill-Switch-SDK-Agent/ci.yml?branch=main&label=CI)](https://github.com/LoopVerses/Kill-Switch-SDK-Agent/actions)
 
-**Production-grade TypeScript client for the Agent Kill Switch control plane** — telemetry ingestion, agent lifecycle, kill events, and policy evaluation over HTTPS, with the ergonomics you expect from first-party cloud SDKs.
+### Enterprise-grade TypeScript client for governed AI agent operations
 
-[Installation](#installation) · [Quick start](#quick-start) · [Core concepts](#core-concepts) · [API reference](#http--resource-mapping) · [Errors](#errors--retries)
+**Telemetry · agent registry · kill decisions · policy evaluation** — all over HTTPS with **resource-oriented APIs**, **automatic resilience** (timeouts, retries, backoff), a **typed error surface** suitable for SRE playbooks, and **first-class cancellation** via `AbortSignal`. Built for teams that treat autonomous agents as **production systems**, not demos.
+
+[Installation](#installation) · [Quick start](#quick-start) · [Architecture](#how-it-fits-your-stack) · [API reference](#complete-api-reference) · [Errors & reliability](#errors--reliability) · [Security](#security--compliance-minded-usage) · [FAQ](#faq)
 
 </div>
 
 ---
 
-> **Looking for the Python control plane or workers?** This package is the **Node.js / TypeScript** runtime SDK for HTTP APIs. Platform services (FastAPI, workers, Go executors) live in the **Agent Kill Switch** monorepo. The public mirror for this SDK is [**Kill-Switch-SDK-Agent**](https://github.com/LoopVerses/Kill-Switch-SDK-Agent).
+> **Platform vs SDK** — This package is the **official Node.js / TypeScript HTTP client** for the Agent Kill Switch **control plane APIs**. The broader platform (FastAPI services, Go executors, policy engines, operator dashboards) ships separately. The public source mirror lives at [**LoopVerses/Kill-Switch-SDK-Agent**](https://github.com/LoopVerses/Kill-Switch-SDK-Agent).
 
 ---
 
-## Why this SDK
+## Table of contents
 
-The Agent Kill Switch **Node.js SDK** is a **small, strict, dependency-light** client: one main class, **namespaced resources**, **timeouts**, **automatic retries** on transient failures, a versioned **`User-Agent`**, optional **`AbortSignal`** per call, and a **typed error hierarchy** so production code can branch on `401` / `429` / `5xx` without string-matching.
-
-It is **provider-agnostic** at the HTTP boundary: point `baseURL` at your deployment (self-hosted or managed) and authenticate with **API keys** or **Bearer JWTs** as your gateway expects.
+1. [Why teams choose this SDK](#why-teams-choose-this-sdk)
+2. [What you can build](#what-you-can-build)
+3. [How it fits your stack](#how-it-fits-your-stack)
+4. [Requirements](#requirements)
+5. [Installation](#installation)
+6. [Quick start](#quick-start)
+7. [Authentication](#authentication)
+8. [Client configuration](#client-configuration)
+9. [Complete API reference](#complete-api-reference)
+10. [Telemetry payloads](#telemetry-payloads)
+11. [Errors & reliability](#errors--reliability)
+12. [Observability](#observability)
+13. [Security & compliance-minded usage](#security--compliance-minded-usage)
+14. [Development & testing](#development--testing)
+15. [Versioning & releases](#versioning--releases)
+16. [FAQ](#faq)
+17. [Acknowledgements](#acknowledgements)
+18. [License](#license)
 
 ---
 
-## Core concepts
+## Why teams choose this SDK
 
-| Concept | What you get |
-|--------|----------------|
-| **`AgentKillSwitch`** | Single entry client (default export). Holds `health`, `telemetry`, `agents`, and `kill` sub-clients. |
-| **Resources** | `client.telemetry.sendBatch`, `client.agents.register`, `client.kill.latest`, … — predictable grouping, similar to large cloud SDKs. |
-| **Resilience** | Per-request **timeout** (default 60s), **retries** with backoff + **`Retry-After`** on `429`, and retries on `408` / `5xx` / connection errors (configurable). |
-| **Typed errors** | `AuthenticationError`, `RateLimitError`, `KillSwitchApiError`, `APIConnectionError`, … — map directly to HTTP and transport failures. |
-| **Types** | DTOs re-exported from **`@agent-killswitch/shared-types`** (`KillEventRecord`, `AgentRecord`, …). |
+| Capability | Why it matters in production |
+|------------|------------------------------|
+| **Resource layout** | `client.telemetry`, `client.agents`, `client.kill`, `client.health` — predictable structure similar to hyperscaler SDKs; onboard new engineers faster. |
+| **Deterministic errors** | Subclasses for **401 / 403 / 404 / 400 / 429 / 5xx** plus **connection** and **abort** types — your alert routing and retries stay explicit, not string-based. |
+| **Resilient transport** | Timeouts, capped exponential backoff, optional **`Retry-After`** honouring on **429**, retries on **408** and **5xx** — fewer flaky deploys when the control plane is under load. |
+| **Cancellation** | Every call accepts **`AbortSignal`** — propagate shutdown from Kubernetes, serverless deadlines, or user cancel. |
+| **Minimal footprint** | No heavy runtime beyond **`fetch`** (Node 20+) and a small dependency on **`@agent-killswitch/shared-types`**. |
+| **Enterprise ergonomics** | Versioned **`User-Agent`**, stable **`VERSION` export**, ESM-native, **strict TypeScript** friendly. |
+
+---
+
+## What you can build
+
+- **Always-on agent workers** that heartbeat and stream tool telemetry into the control plane for anomaly scoring.
+- **Approval-gated runtimes** that query **`kill.latest`** before each high-risk tool invocation.
+- **Orchestrators** that register agents dynamically and attach org-scoped API keys per tenant.
+- **Incident automation** that records kills with rich **`metadata`** and correlates via **`correlationId`**.
+- **Policy probes** that call **`kill.evaluate`** against kill-core without reimplementing HTTP and auth.
+
+---
+
+## How it fits your stack
+
+```mermaid
+flowchart LR
+  subgraph Runtime["Your runtime"]
+    A[Agents / workers / services]
+  end
+  subgraph SDK["@agent-killswitch/sdk-node"]
+    C[AgentKillSwitch]
+  end
+  subgraph CP["Control plane HTTPS API"]
+    API[Ingest · agents · kill · evaluate]
+  end
+  A --> C
+  C -->|TLS + auth| API
+```
+
+The SDK is a **thin, opinionated HTTP layer**: it does not embed policy DSL, ML models, or dashboard UI — it connects your processes to the APIs that do.
 
 ---
 
 ## Requirements
 
-- **Node.js** `>= 20.10.0` (uses global `fetch`, `AbortSignal.timeout`, `AbortSignal.any`).
-- **ES modules** — `"type": "module"` in your app, or consume the emitted `.js` from a bundler.
-- A reachable **Agent Kill Switch API** `baseURL`.
+| Requirement | Notes |
+|-------------|--------|
+| **Node.js** | `>= 20.10.0` (uses global `fetch`, `AbortSignal.timeout`, `AbortSignal.any`). |
+| **Module system** | **ESM** — `"type": "module"` or equivalent bundler pipeline. |
+| **Network** | Outbound HTTPS to your **`baseURL`**; proxy support via custom **`fetch`**. |
 
 ---
 
@@ -67,18 +119,22 @@ pnpm add @agent-killswitch/sdk-node
 yarn add @agent-killswitch/sdk-node
 ```
 
-Runtime dependency **`@agent-killswitch/shared-types`** is installed automatically for shared contracts.
+**Peer contract:** `@agent-killswitch/shared-types` is a **runtime dependency** of this package and is installed automatically — you import DTOs from the SDK’s re-exports or from `shared-types` directly if you prefer.
 
 ---
 
 ## Quick start
 
-Set your API origin and credential (never commit secrets — use env vars or a secret manager):
+### 1. Configure secrets (environment)
+
+Never commit API keys or JWTs. Example for shell-based dev:
 
 ```bash
-export KILLSWITCH_API_URL="https://api.example.com"
-export KILLSWITCH_API_KEY="your-api-key"
+export KILLSWITCH_API_URL="https://api.yourcompany.com"
+export KILLSWITCH_API_KEY="ks_live_…"
 ```
+
+### 2. Instantiate the client
 
 ```typescript
 import AgentKillSwitch, {
@@ -90,124 +146,191 @@ import AgentKillSwitch, {
 const client = new AgentKillSwitch({
   baseURL: process.env.KILLSWITCH_API_URL!,
   apiKey: process.env.KILLSWITCH_API_KEY,
+  timeout: 60_000,
+  maxRetries: 2,
 });
+```
 
-// Ingest telemetry (batch)
+### 3. Ingest telemetry, read kill state, register agents
+
+```typescript
 const { accepted } = await client.telemetry.sendBatch([
-  { type: 'heartbeat', agentId: 'support-bot-1', emittedAt: new Date().toISOString() },
+  {
+    type: 'tool_call',
+    agentId: 'support-bot-1',
+    emittedAt: new Date().toISOString(),
+    payload: { tool: 'web_search', query_len: 42 },
+  },
 ]);
 
-// Latest kill for an agent external ref (null if none)
-const latest = await client.kill.latest('support-bot-1');
+const latestKill = await client.kill.latest('support-bot-1');
+if (latestKill) {
+  console.warn('Agent is in post-kill state', latestKill.reason, latestKill.decidedAt);
+}
 
-// Register an agent if your flow creates them from the runtime
-await client.agents.register({ externalRef: 'support-bot-1', name: 'Support bot' });
-
-// Optional: evaluate kill policy via API → kill-core proxy
-const decision = await client.kill.evaluate('support-bot-1');
-console.log({ accepted, latest, decision });
+await client.agents.register({
+  externalRef: 'support-bot-1',
+  name: 'Tier-1 support bot',
+});
 ```
 
-**Default export** equals **`AgentKillSwitch`**:
+### 4. Default export
+
+`import Client from '@agent-killswitch/sdk-node'` is identical to **`AgentKillSwitch`**.
+
+### 5. Cancellation & deadlines
 
 ```typescript
-import Client from '@agent-killswitch/sdk-node';
+const ctrl = new AbortController();
+const t = setTimeout(() => ctrl.abort(), 8_000);
 
-const client = new Client({ baseURL: 'https://api.example.com', apiKey: '…' });
-```
-
-### Per-request cancellation
-
-Every resource method accepts an optional trailing **`{ signal }`** (merged with the client timeout):
-
-```typescript
-const ac = new AbortController();
-setTimeout(() => ac.abort(), 5_000);
-
-await client.telemetry.sendBatch([{ type: 'ping' }], { signal: ac.signal });
-```
-
----
-
-## Client configuration
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `baseURL` | `string` | API origin (trailing slash optional). |
-| `baseUrl` | `string` | Deprecated alias of `baseURL`. |
-| `apiKey` | `string` | `X-Api-Key` header (typically preferred when both are set). |
-| `bearerToken` | `string` | `Authorization: Bearer …`. |
-| `fetch` | `typeof fetch` | Custom fetch (tests, proxies, non-standard runtimes). |
-| `fetchImpl` | `typeof fetch` | Deprecated alias of `fetch`. |
-| `defaultHeaders` | `Record<string, string>` | Merged on every request (e.g. tracing, signing). |
-| `timeout` | `number` | Timeout in **ms** (default `60000`). `0` disables the client-side timeout (still honors `signal`). |
-| `maxRetries` | `number` | Extra attempts after the first for retriable HTTP / network errors (default `2`). |
-
----
-
-## HTTP ↔ resource mapping
-
-| Resource | Method | HTTP |
-|----------|--------|------|
-| **`client.health`** | `check()` | `GET /healthz` (no auth) |
-| **`client.telemetry`** | `sendBatch(events)` | `POST /v1/telemetry/batch` → **202** |
-| **`client.agents`** | `list(limit?)` | `GET /agents` |
-| | `register({ externalRef, name? })` | `POST /agents` → **201** |
-| **`client.kill`** | `latest(externalRef)` | `GET /agents/:externalRef/kill/latest` → **`null`** on **404** |
-| | `record(input)` | `POST /kill` → **201** |
-| | `evaluate(externalRef)` | `POST /kill/evaluate/:externalRef` → **200** |
-
-Telemetry payloads are **`Record<string, unknown>[]`** so you can align with your server’s ingestion schema without waiting on SDK releases for every field.
-
----
-
-## Legacy flat API
-
-`KillSwitchClient` is an **alias** of `AgentKillSwitch`. Flat helpers (`getLastKill`, `sendTelemetryBatch`, …) still work and delegate to the nested resources (marked `@deprecated` in JSDoc for IDE hints).
-
----
-
-## Errors & retries
-
-Non-success HTTP responses become **`KillSwitchApiError`** or a subclass (`AuthenticationError`, `RateLimitError`, …). **`RateLimitError`** exposes **`retryAfterMs`** when `Retry-After` is present. Transport failures use **`APIConnectionError`**; aborts use **`APIUserAbortError`**.
-
-```typescript
 try {
-  await client.telemetry.sendBatch([]);
-} catch (e) {
-  if (e instanceof RateLimitError) {
-    console.warn('Retry after (ms):', e.retryAfterMs);
-  } else if (e instanceof KillSwitchApiError) {
-    console.error(e.status, e.code, e.message);
-  } else {
-    throw e;
-  }
+  await client.telemetry.sendBatch([{ type: 'ping' }], { signal: ctrl.signal });
+} finally {
+  clearTimeout(t);
 }
 ```
 
 ---
 
-## Version & `User-Agent`
+## Authentication
 
-The package exports **`VERSION`**. Every request sends:
+Your control plane validates credentials server-side. This SDK supports the common patterns:
 
-`User-Agent: AgentKillSwitch-JS/<VERSION>`
+| Mechanism | SDK option | HTTP behaviour |
+|-----------|------------|----------------|
+| **API key** (DB-backed, opaque, or key JWT) | `apiKey: string` | Sets **`X-Api-Key`**. Typically evaluated **before** bearer tokens on the server. |
+| **User or machine JWT** | `bearerToken: string` | Sets **`Authorization: Bearer …`**. |
 
-Keep **`src/version.ts`** in sync with **`package.json`** `"version"` when you cut releases.
+**Guidance**
+
+- Prefer **one** primary mechanism per integration to simplify auditing.
+- For multi-tenant SaaS, issue **per-tenant keys** with the smallest scope your API supports.
+- Rotate keys on compromise; use a secrets manager in production.
+
+Optional **`defaultHeaders`** merge **after** built-in headers — useful for internal **request signing**, **WAF tokens**, or **trace propagation** (`traceparent`, etc.).
 
 ---
 
-## Types
+## Client configuration
 
-Re-exported from **`@agent-killswitch/shared-types`**: `AgentRecord`, `KillEventRecord`, `TelemetryBatchAccepted`, …
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `baseURL` | `string` | — | **Required.** Origin of the API, e.g. `https://api.example.com`. Trailing slash is stripped. |
+| `baseUrl` | `string` | — | Deprecated alias of **`baseURL`**. |
+| `apiKey` | `string` | — | API key credential. |
+| `bearerToken` | `string` | — | Bearer JWT or compatible token. |
+| `fetch` | `typeof fetch` | `globalThis.fetch` | Custom fetch (tests, proxies, non-Node runtimes wrapped with `fetch` semantics). |
+| `fetchImpl` | `typeof fetch` | — | Deprecated alias of **`fetch`**. |
+| `defaultHeaders` | `Record<string, string>` | `{}` | Extra headers on **every** request. |
+| `timeout` | `number` | `60000` | Client-side per-request timeout (**ms**). Use **`0`** to disable (still respects **`signal`**). |
+| `maxRetries` | `number` | `2` | **Additional** attempts after the first for retriable HTTP statuses and connection errors. |
 
-Defined in this package: `AgentKillSwitchOptions`, `RegisterAgentInput`, `RecordKillInput`, `RequestCallOptions`, `ParsedApiError`.
+Every resource method accepts an optional trailing **`RequestCallOptions`**: `{ signal?: AbortSignal }`.
 
 ---
 
-## Development (monorepo)
+## Complete API reference
 
-From the repository root (with pnpm workspaces):
+### `client.health`
+
+| Method | Returns | HTTP |
+|--------|---------|------|
+| `check(opts?)` | `{ status: string }` | `GET /healthz` — **no auth**; use for probes and synthetic monitoring. |
+
+### `client.telemetry`
+
+| Method | Returns | HTTP |
+|--------|---------|------|
+| `sendBatch(events, opts?)` | `{ accepted: number }` | `POST /v1/telemetry/batch` — **202 Accepted** |
+
+Server may cap batch size; consult your deployment’s limits.
+
+### `client.agents`
+
+| Method | Returns | HTTP |
+|--------|---------|------|
+| `list(limit?, opts?)` | `AgentRecord[]` | `GET /agents?limit=` |
+| `register(input, opts?)` | `AgentRecord` | `POST /agents` — **201** |
+
+### `client.kill`
+
+| Method | Returns | HTTP |
+|--------|---------|------|
+| `latest(externalRef, opts?)` | `KillEventRecord \| null` | `GET /agents/:externalRef/kill/latest` — **`null`** on **404** |
+| `record(input, opts?)` | `KillEventRecord` | `POST /kill` — **201** |
+| `evaluate(externalRef, opts?)` | `Record<string, unknown>` | `POST /kill/evaluate/:externalRef` — shape depends on kill-core |
+
+### Legacy flat methods (stable)
+
+`KillSwitchClient` is an **alias** of **`AgentKillSwitch`**. These methods delegate to the nested API: `healthz`, `sendTelemetryBatch`, `registerAgent`, `listAgents`, `getLastKill`, `recordKill`, `evaluateKill` (marked `@deprecated` in JSDoc — prefer nested calls in new code).
+
+---
+
+## Telemetry payloads
+
+Events are **`Record<string, unknown>[]`** so your platform can evolve fields without waiting for SDK releases. Recommended conventions (informational — align with your server contract):
+
+| Field | Purpose |
+|-------|---------|
+| `type` | Event discriminator (`tool_call`, `heartbeat`, `model_output`, …). |
+| `agentId` or `agentExternalRef` | Tie events to an agent identity your API understands. |
+| `emittedAt` | ISO-8601 timestamp for ordering and latency analysis. |
+| `payload` | Arbitrary structured detail for analytics and forensics. |
+
+---
+
+## Errors & reliability
+
+### HTTP error classes
+
+| Class | Typical status | Operational notes |
+|-------|----------------|---------------------|
+| `AuthenticationError` | 401 | Invalid or missing credentials — fix config before retry storm. |
+| `PermissionDeniedError` | 403 | Valid identity but insufficient scope — policy / RBAC issue. |
+| `NotFoundError` | 404 | Resource missing — **not** used for `kill.latest` “no rows”; that returns **`null`**. |
+| `BadRequestError` | 400, 422 | Schema / validation — inspect **`message`** and **`details`**. |
+| `RateLimitError` | 429 | Exposes **`retryAfterMs`** when **`Retry-After`** is parseable. |
+| `InternalServerError` | ≥ 500 | Transient — SDK may retry according to **`maxRetries`**. |
+| `KillSwitchApiError` | other | Generic non-success; always carries **`status`**, **`code`**, **`message`**. |
+
+### Transport & control flow
+
+| Class | When |
+|-------|------|
+| `APIConnectionError` | DNS, TLS, reset, or other failures **before** a response body. |
+| `APIUserAbortError` | **`AbortSignal`** abort or client timeout branch. |
+| `KillSwitchError` | Local misuse (e.g. missing **`baseURL`**). |
+
+### Retry semantics (summary)
+
+- Retries apply to **408**, **429**, **500**, **502**, **503**, **504**, and **connection errors**.
+- Backoff is **exponential with jitter**, capped; **429** may respect **`Retry-After`** (seconds or HTTP-date).
+- **Non-idempotent** writes (`record`, `sendBatch`) can be retried by the SDK when the failure was **before** your business logic committed — design server-side **idempotency keys** if duplicates are unacceptable.
+
+---
+
+## Observability
+
+- **`VERSION`** export — pin in support bundles and structured logs.
+- **`User-Agent: AgentKillSwitch-JS/<VERSION>`** — set on every request so your API gateway and logs can segment SDK traffic.
+- Pair with your platform’s **`request_id` / `trace_id`** headers via **`defaultHeaders`**.
+
+---
+
+## Security & compliance-minded usage
+
+- **Secrets:** Load from env, vault, or cloud secret manager — never log raw keys.
+- **TLS:** Use HTTPS `baseURL` in production; terminate TLS at your edge as per org policy.
+- **Least privilege:** Scope API keys to the minimum **org** and **capabilities** required.
+- **Data minimization:** Send only telemetry fields your governance model allows.
+- **Audit:** Correlate kills with **`correlationId`** and structured **`metadata`** for downstream audit stores.
+
+---
+
+## Development & testing
+
+In this monorepo (or the [public mirror](https://github.com/LoopVerses/Kill-Switch-SDK-Agent)):
 
 ```bash
 pnpm install
@@ -216,21 +339,39 @@ pnpm --filter @agent-killswitch/sdk-node build
 pnpm --filter @agent-killswitch/sdk-node test
 ```
 
+Inject **`fetch`** in tests to assert URLs, headers, and retry behaviour without hitting the network.
+
 ---
 
-## Security
+## Versioning & releases
 
-- Do **not** commit API keys or JWTs.
-- Rotate keys on compromise; scope keys to least privilege on the control plane.
+- **Semver** — breaking HTTP contract or TypeScript breaking changes → **major**; additive features → **minor**; fixes → **patch**.
+- Keep **`src/version.ts`** in lockstep with **`package.json` `"version"`** on every publish (release automation recommended).
+
+---
+
+## FAQ
+
+**Does the SDK embed the policy engine or ML models?**  
+No. It calls your deployed HTTP APIs only.
+
+**Can I use it from Edge / Cloudflare Workers?**  
+If your runtime provides **`fetch`** and modern **`AbortSignal`** APIs, pass it via the **`fetch`** option and validate timeout behaviour.
+
+**Does `kill.latest` throw on 404?**  
+No — it returns **`null`** so “no kill yet” stays a clean control-flow path.
+
+**How do I disable retries?**  
+Set **`maxRetries: 0`**.
 
 ---
 
 ## Acknowledgements
 
-This SDK builds on **TypeScript**, the **WinterTC / Fetch** APIs available in modern Node.js, and **`@agent-killswitch/shared-types`** for shared DTOs. Thank you to everyone shipping safer agent runtimes behind real APIs.
+Built with **TypeScript**, modern **Node.js** **fetch**, and **`@agent-killswitch/shared-types`**. Thanks to teams investing in **governed autonomy** — safer agents benefit everyone.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](https://github.com/LoopVerses/Kill-Switch-SDK-Agent/blob/main/LICENSE) in the public mirror repository.
+MIT — see [LICENSE](https://github.com/LoopVerses/Kill-Switch-SDK-Agent/blob/main/LICENSE) in the public repository.
