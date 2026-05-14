@@ -1,7 +1,7 @@
 {
   "name": "kill-switch-sdk-agent",
   "private": true,
-  "description": "Kill Switch SDK Agent — public Node.js SDK for the Agent Kill Switch control plane",
+  "description": "Public monorepo: enterprise Node.js SDK (@agent-killswitch/sdk-node) and shared types for the Agent Kill Switch control plane.",
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": ">=20.10.0",
