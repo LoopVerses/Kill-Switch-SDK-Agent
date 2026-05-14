@@ -1,6 +1,8 @@
-import type { ApiErrorBody } from '@agent-killswitch/shared-types';
-
-export type ParsedApiError = Pick<ApiErrorBody, 'code' | 'message' | 'details'>;
+export type ParsedApiError = {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+};
 
 /** Best-effort redaction so API error bodies never echo bearer tokens or obvious secrets into Error.message. */
 export function redactSensitiveStrings(input: string): string {

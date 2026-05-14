@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "pnpm --filter @agent-killswitch/shared-types build && pnpm --filter @agent-killswitch/sdk-node build",
-    "typecheck": "pnpm -r run typecheck",
+    "typecheck": "pnpm --filter @agent-killswitch/shared-types build && pnpm -r run typecheck",
     "test": "pnpm --filter @agent-killswitch/sdk-node test",
     "lint": "pnpm -r run lint"
   }
