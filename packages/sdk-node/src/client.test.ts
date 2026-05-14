@@ -5,7 +5,16 @@ import AgentKillSwitch, {
   AuthenticationError,
   KillSwitchError,
   KillSwitchApiError,
+  RateLimitError,
+  APIUserAbortError,
+  createKillSwitchClient,
+  VERSION,
+  type Hooks,
+  type Logger,
 } from './index.ts';
+
+const okJson = (b: unknown, status = 200) =>
+  new Response(JSON.stringify(b), { status, headers: { 'Content-Type': 'application/json' } });
 
 test('KillSwitchClient alias works and getLastKill returns null on 404', async () => {
   const client = new KillSwitchClient({
@@ -18,6 +27,14 @@ test('KillSwitchClient alias works and getLastKill returns null on 404', async (
   assert.equal(out, null);
 });
 
+test('createKillSwitchClient factory returns an AgentKillSwitch', () => {
+  const client = createKillSwitchClient({
+    baseURL: 'https://api.example.com',
+    fetch: async () => okJson({}),
+  });
+  assert.ok(client instanceof AgentKillSwitch);
+});
+
 test('nested kill.latest uses /agents/:ref/kill/latest', async () => {
   let url = '';
   const client = new AgentKillSwitch({
@@ -26,10 +43,7 @@ test('nested kill.latest uses /agents/:ref/kill/latest', async () => {
     maxRetries: 0,
     fetchImpl: async (u) => {
       url = String(u);
-      return new Response(JSON.stringify({ id: 'k1', agentId: 'a1', reason: 'x', decidedAt: '2026-01-01T00:00:00Z' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return okJson({ id: 'k1', agentId: 'a1', reason: 'x', decidedAt: '2026-01-01T00:00:00Z' });
     },
   });
   const out = await client.kill.latest('my agent');
@@ -37,27 +51,24 @@ test('nested kill.latest uses /agents/:ref/kill/latest', async () => {
   assert.equal(out?.reason, 'x');
 });
 
-test('KillSwitchApiError path: 401 becomes AuthenticationError', async () => {
+test('401 becomes AuthenticationError', async () => {
   const client = new AgentKillSwitch({
     baseURL: 'http://example.test',
     dangerouslyAllowInsecureHttp: true,
     maxRetries: 0,
-    fetchImpl: async () =>
-      new Response(JSON.stringify({ detail: 'invalid_api_key' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      }),
+    fetchImpl: async () => okJson({ detail: 'invalid_api_key' }, 401),
   });
   await assert.rejects(
     () => client.telemetry.sendBatch([{ x: 1 }]),
-    (e: unknown) => e instanceof AuthenticationError,
+    (e: unknown) => e instanceof AuthenticationError
   );
 });
 
-test('telemetry.sendBatch posts JSON and sends User-Agent', async () => {
+test('telemetry.sendBatch posts JSON and sends UA + Request-Id', async () => {
   let path = '';
   let body = '';
   let ua = '';
+  let reqId = '';
   const client = new AgentKillSwitch({
     baseURL: 'http://example.test',
     dangerouslyAllowInsecureHttp: true,
@@ -67,9 +78,10 @@ test('telemetry.sendBatch posts JSON and sends User-Agent', async () => {
       path = String(u);
       body = String(init?.body ?? '');
       ua = (init?.headers as Headers).get('User-Agent') ?? '';
+      reqId = (init?.headers as Headers).get('X-Request-Id') ?? '';
       assert.equal(init?.method, 'POST');
       assert.equal((init?.headers as Headers).get('X-Api-Key'), 'sk_test');
-      return new Response(JSON.stringify({ accepted: 2 }), { status: 202, headers: { 'Content-Type': 'application/json' } });
+      return okJson({ accepted: 2 }, 202);
     },
   });
   const out = await client.telemetry.sendBatch([{ type: 'ping' }]);
@@ -77,9 +89,11 @@ test('telemetry.sendBatch posts JSON and sends User-Agent', async () => {
   assert.deepEqual(JSON.parse(body), { events: [{ type: 'ping' }] });
   assert.equal(out.accepted, 2);
   assert.match(ua, /^AgentKillSwitch-JS\//);
+  assert.ok(ua.includes(VERSION));
+  assert.match(reqId, /^[0-9a-f-]{16,}$/i);
 });
 
-test('retries on 503 then succeeds', async () => {
+test('retries on 503 then succeeds; honours numeric Retry-After', async () => {
   let n = 0;
   const client = new AgentKillSwitch({
     baseURL: 'http://example.test',
@@ -89,8 +103,9 @@ test('retries on 503 then succeeds', async () => {
     timeout: 5000,
     fetchImpl: async () => {
       n += 1;
-      if (n === 1) return new Response('unavailable', { status: 503 });
-      return new Response(JSON.stringify({ accepted: 1 }), { status: 202, headers: { 'Content-Type': 'application/json' } });
+      if (n === 1)
+        return new Response('unavailable', { status: 503, headers: { 'Retry-After': '0' } });
+      return okJson({ accepted: 1 }, 202);
     },
   });
   const out = await client.telemetry.sendBatch([{ a: 1 }]);
@@ -106,7 +121,7 @@ test('http baseURL rejected unless dangerouslyAllowInsecureHttp', () => {
         maxRetries: 0,
         fetchImpl: async () => new Response(null, { status: 404 }),
       }),
-    (e: unknown) => e instanceof KillSwitchError,
+    (e: unknown) => e instanceof KillSwitchError
   );
 });
 
@@ -117,7 +132,7 @@ test('credentials in baseURL rejected', () => {
         baseURL: 'https://user:pass@api.example.com',
         fetchImpl: async () => new Response(null),
       }),
-    (e: unknown) => e instanceof KillSwitchError,
+    (e: unknown) => e instanceof KillSwitchError
   );
 });
 
@@ -129,8 +144,224 @@ test('header CRLF rejected', () => {
         defaultHeaders: { 'X-Evil': 'a\r\nInjected: 1' },
         fetchImpl: async () => new Response(null),
       }),
-    (e: unknown) => e instanceof KillSwitchError,
+    (e: unknown) => e instanceof KillSwitchError
   );
+});
+
+test('per-call headers merge but cannot override built-ins', async () => {
+  let xCustom = '';
+  let xApiKey = '';
+  const client = new AgentKillSwitch({
+    baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
+    apiKey: 'real-key',
+    maxRetries: 0,
+    fetchImpl: async (_u, init) => {
+      const h = init?.headers as Headers;
+      xCustom = h.get('X-Custom') ?? '';
+      xApiKey = h.get('X-Api-Key') ?? '';
+      return okJson({ accepted: 1 }, 202);
+    },
+  });
+  await client.telemetry.sendBatch([{ a: 1 }], {
+    headers: { 'X-Custom': 'yes', 'X-Api-Key': 'attempt-override' },
+  });
+  assert.equal(xCustom, 'yes');
+  assert.equal(xApiKey, 'real-key'); // built-in wins
+});
+
+test('idempotencyKey sent on kill.record (derived from correlationId)', async () => {
+  let idem = '';
+  const client = new AgentKillSwitch({
+    baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
+    maxRetries: 0,
+    fetchImpl: async (_u, init) => {
+      idem = (init?.headers as Headers).get('Idempotency-Key') ?? '';
+      return okJson(
+        { id: 'k1', agentId: 'a1', reason: 'r', decidedAt: '2026-01-01T00:00:00Z' },
+        201
+      );
+    },
+  });
+  await client.kill.record({
+    agentExternalRef: 'agent-1',
+    reason: 'r',
+    correlationId: 'inc-42',
+  });
+  assert.equal(idem, 'kill:agent-1:inc-42');
+});
+
+test('explicit idempotencyKey wins over derived', async () => {
+  let idem = '';
+  const client = new AgentKillSwitch({
+    baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
+    maxRetries: 0,
+    fetchImpl: async (_u, init) => {
+      idem = (init?.headers as Headers).get('Idempotency-Key') ?? '';
+      return okJson(
+        { id: 'k1', agentId: 'a1', reason: 'r', decidedAt: '2026-01-01T00:00:00Z' },
+        201
+      );
+    },
+  });
+  await client.kill.record(
+    {
+      agentExternalRef: 'agent-1',
+      reason: 'r',
+      correlationId: 'inc-42',
+      idempotencyKey: 'explicit',
+    },
+    { idempotencyKey: 'per-call' }
+  );
+  assert.equal(idem, 'per-call');
+});
+
+test('hooks fire in order: onRequest → onResponse', async () => {
+  const order: string[] = [];
+  const hooks: Hooks = {
+    onRequest: (ctx) => {
+      order.push(`req:${ctx.method}:${ctx.path}:${ctx.attempt}`);
+    },
+    onResponse: (ctx) => {
+      order.push(`res:${ctx.response.status}:${ctx.durationMs >= 0}`);
+    },
+  };
+  const client = new AgentKillSwitch({
+    baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
+    maxRetries: 0,
+    hooks,
+    fetchImpl: async () => okJson({ status: 'ok' }),
+  });
+  await client.health.check();
+  assert.deepEqual(order, ['req:GET:/healthz:0', 'res:200:true']);
+});
+
+test('onRetry fires before each retry', async () => {
+  const retries: number[] = [];
+  let n = 0;
+  const client = new AgentKillSwitch({
+    baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
+    maxRetries: 2,
+    hooks: { onRetry: (ctx) => retries.push(ctx.attempt) },
+    fetchImpl: async () => {
+      n += 1;
+      if (n < 3) return new Response('x', { status: 503, headers: { 'Retry-After': '0' } });
+      return okJson({ accepted: 1 }, 202);
+    },
+  });
+  await client.telemetry.sendBatch([{ a: 1 }]);
+  assert.deepEqual(retries, [0, 1]);
+});
+
+test('logger receives retry events', async () => {
+  const warns: string[] = [];
+  const logger: Logger = {
+    debug: () => {},
+    info: () => {},
+    warn: (m) => warns.push(m),
+    error: () => {},
+  };
+  let n = 0;
+  const client = new AgentKillSwitch({
+    baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
+    maxRetries: 1,
+    logger,
+    fetchImpl: async () => {
+      n += 1;
+      if (n === 1) return new Response('x', { status: 503, headers: { 'Retry-After': '0' } });
+      return okJson({ accepted: 1 }, 202);
+    },
+  });
+  await client.telemetry.sendBatch([{ a: 1 }]);
+  assert.ok(warns.includes('killswitch.retry'));
+});
+
+test('per-call timeout overrides client timeout', async () => {
+  const client = new AgentKillSwitch({
+    baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
+    timeout: 60_000,
+    maxRetries: 0,
+    fetchImpl: async (_u, init) =>
+      new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('aborted', 'TimeoutError'))
+        );
+      }),
+  });
+  await assert.rejects(
+    () => client.health.check({ timeout: 10 }),
+    (e: unknown) => e instanceof APIUserAbortError && /10ms/.test((e as Error).message)
+  );
+});
+
+test('429 with HTTP-date Retry-After parses into RateLimitError.retryAfterMs', async () => {
+  const future = new Date(Date.now() + 1234).toUTCString();
+  const client = new AgentKillSwitch({
+    baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
+    maxRetries: 0,
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ message: 'slow down' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': future },
+      }),
+  });
+  await assert.rejects(
+    () => client.telemetry.sendBatch([{ a: 1 }]),
+    (e: unknown) => {
+      if (!(e instanceof RateLimitError)) return false;
+      return typeof e.retryAfterMs === 'number' && e.retryAfterMs >= 0;
+    }
+  );
+});
+
+test('telemetry.sendBatch rejects empty batch without dialling', async () => {
+  let called = 0;
+  const client = new AgentKillSwitch({
+    baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
+    maxRetries: 0,
+    fetchImpl: async () => {
+      called += 1;
+      return okJson({ accepted: 0 }, 202);
+    },
+  });
+  await assert.rejects(
+    () => client.telemetry.sendBatch([]),
+    (e: unknown) => e instanceof KillSwitchError
+  );
+  assert.equal(called, 0);
+});
+
+test('signing attaches HMAC headers', async () => {
+  let captured: Record<string, string | null> = {};
+  const client = new AgentKillSwitch({
+    baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
+    maxRetries: 0,
+    signing: { keyId: 'kid-1', secret: 'topsecret' },
+    fetchImpl: async (_u, init) => {
+      const h = init?.headers as Headers;
+      captured = {
+        keyId: h.get('X-AKS-Key-Id'),
+        signedAt: h.get('X-AKS-Signed-At'),
+        nonce: h.get('X-AKS-Nonce'),
+        sig: h.get('X-AKS-Signature'),
+      };
+      return okJson({ status: 'ok' });
+    },
+  });
+  await client.health.check();
+  assert.equal(captured.keyId, 'kid-1');
+  assert.match(captured.signedAt ?? '', /^\d+$/);
+  assert.match(captured.nonce ?? '', /^[0-9a-f]{32}$/);
+  assert.match(captured.sig ?? '', /^v1=[A-Za-z0-9_-]+$/);
 });
 
 test('API error message redacts Bearer token', async () => {
@@ -141,4 +372,28 @@ test('API error message redacts Bearer token', async () => {
   const err = await KillSwitchApiError.fromResponse(res);
   assert.ok(!err.message.includes('sk_live'));
   assert.ok(err.message.includes('[REDACTED]'));
+});
+
+test('invalid timeout rejected at construction', () => {
+  assert.throws(
+    () =>
+      new AgentKillSwitch({
+        baseURL: 'https://api.example.com',
+        timeout: -1,
+        fetch: async () => new Response(null),
+      }),
+    (e: unknown) => e instanceof KillSwitchError
+  );
+});
+
+test('invalid maxRetries rejected at construction', () => {
+  assert.throws(
+    () =>
+      new AgentKillSwitch({
+        baseURL: 'https://api.example.com',
+        maxRetries: 1.5,
+        fetch: async () => new Response(null),
+      }),
+    (e: unknown) => e instanceof KillSwitchError
+  );
 });

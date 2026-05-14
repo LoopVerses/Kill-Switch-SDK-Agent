@@ -14,7 +14,9 @@ export function sanitizeHeaderRecord(headers: Record<string, string>): Record<st
       throw new KillSwitchError(`HTTP header name exceeds ${MAX_HEADER_NAME} characters.`);
     }
     if (CRLF_OR_NUL.test(name) || CRLF_OR_NUL.test(v)) {
-      throw new KillSwitchError('HTTP header name or value contains CR, LF, or NUL (rejected for security).');
+      throw new KillSwitchError(
+        'HTTP header name or value contains CR, LF, or NUL (rejected for security).'
+      );
     }
     if (v.length > MAX_HEADER_VALUE) {
       throw new KillSwitchError(`HTTP header value exceeds ${MAX_HEADER_VALUE} characters.`);
@@ -48,16 +50,20 @@ export function validateApiOrigin(raw: string, allowInsecureHttp: boolean): stri
   try {
     u = new URL(raw.trim());
   } catch {
-    throw new KillSwitchError('baseURL must be a valid absolute URL (e.g. https://api.example.com).');
+    throw new KillSwitchError(
+      'baseURL must be a valid absolute URL (e.g. https://api.example.com).'
+    );
   }
   if (u.username !== '' || u.password !== '') {
-    throw new KillSwitchError('Credentials in baseURL are forbidden; use apiKey or bearerToken options.');
+    throw new KillSwitchError(
+      'Credentials in baseURL are forbidden; use apiKey or bearerToken options.'
+    );
   }
   if (u.protocol !== 'https:' && !(allowInsecureHttp && u.protocol === 'http:')) {
     throw new KillSwitchError(
       allowInsecureHttp
         ? 'baseURL scheme must be https: or http:.'
-        : 'baseURL must use https: (pass dangerouslyAllowInsecureHttp: true only for trusted local http).',
+        : 'baseURL must use https: (pass dangerouslyAllowInsecureHttp: true only for trusted local http).'
     );
   }
   if (u.search !== '' || u.hash !== '') {

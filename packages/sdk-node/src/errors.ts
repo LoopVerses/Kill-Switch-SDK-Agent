@@ -19,7 +19,9 @@ function detailToMessage(detail: unknown): string {
   if (typeof detail === 'string') raw = detail;
   else if (Array.isArray(detail)) {
     raw = detail
-      .map((e) => (typeof e === 'object' && e && 'msg' in e ? String((e as { msg: unknown }).msg) : String(e)))
+      .map((e) =>
+        typeof e === 'object' && e && 'msg' in e ? String((e as { msg: unknown }).msg) : String(e)
+      )
       .join('; ');
   } else if (detail && typeof detail === 'object' && 'message' in detail) {
     raw = String((detail as { message: unknown }).message);

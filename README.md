@@ -30,10 +30,10 @@ If you operate agents in production and need **telemetry ingestion**, **agent re
 
 ## Packages
 
-| Package | Version | Role |
-|---------|---------|------|
-| [**`@agent-killswitch/sdk-node`**](./packages/sdk-node/) | **0.3.2** | Production HTTP client: `AgentKillSwitch` with `health`, `telemetry`, `agents`, `kill` namespaces; resilient transport; optional dev-only `http` via explicit flag. |
-| [**`@agent-killswitch/shared-types`**](./packages/shared-types/) | **0.3.0** | Shared contracts (`KillEventRecord`, `AgentRecord`, …) consumed by the SDK and portable to your apps. |
+| Package                                                          | Version   | Role                                                                                                                                                                |
+| ---------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [**`@agent-killswitch/sdk-node`**](./packages/sdk-node/)         | **0.3.2** | Production HTTP client: `AgentKillSwitch` with `health`, `telemetry`, `agents`, `kill` namespaces; resilient transport; optional dev-only `http` via explicit flag. |
+| [**`@agent-killswitch/shared-types`**](./packages/shared-types/) | **0.3.0** | Shared contracts (`KillEventRecord`, `AgentRecord`, …) consumed by the SDK and portable to your apps.                                                               |
 
 Install the SDK from npm; `shared-types` is pulled in as a **runtime dependency** of the client.
 
@@ -60,7 +60,7 @@ yarn add @agent-killswitch/sdk-node
 ## Quick start
 
 ```typescript
-import AgentKillSwitch from '@agent-killswitch/sdk-node';
+import AgentKillSwitch from "@agent-killswitch/sdk-node";
 
 const client = new AgentKillSwitch({
   baseURL: process.env.KILLSWITCH_API_URL!, // must be https:// in production
@@ -68,10 +68,14 @@ const client = new AgentKillSwitch({
 });
 
 const { accepted } = await client.telemetry.sendBatch([
-  { type: 'heartbeat', agentId: 'my-agent', emittedAt: new Date().toISOString() },
+  {
+    type: "heartbeat",
+    agentId: "my-agent",
+    emittedAt: new Date().toISOString(),
+  },
 ]);
 
-const kill = await client.kill.latest('my-agent'); // null if none
+const kill = await client.kill.latest("my-agent"); // null if none
 console.log({ accepted, kill });
 ```
 
@@ -117,6 +121,6 @@ Every push and pull request to **`main`** runs **install → typecheck → build
 
 ## Links
 
-- **Repository:** https://github.com/LoopVerses/Kill-Switch-SDK-Agent  
-- **npm (when published):** https://www.npmjs.com/package/@agent-killswitch/sdk-node  
+- **Repository:** https://github.com/LoopVerses/Kill-Switch-SDK-Agent
+- **npm (when published):** https://www.npmjs.com/package/@agent-killswitch/sdk-node
 - **Deep documentation:** [`packages/sdk-node/README.md`](./packages/sdk-node/README.md)

@@ -1,6 +1,6 @@
-import { AgentKillSwitch, KillSwitchClient } from './client.js';
+import { AgentKillSwitch, KillSwitchClient, createKillSwitchClient } from './client.js';
 
-export { AgentKillSwitch, KillSwitchClient };
+export { AgentKillSwitch, KillSwitchClient, createKillSwitchClient };
 export type { AgentKillSwitchOptions, ClientOptions } from './client.js';
 
 export { VERSION } from './version.js';
@@ -31,7 +31,17 @@ export {
 
 export type { ParsedApiError } from './errors.js';
 
-export { validateApiOrigin, sanitizeHeaderRecord, assertSafeRequestPath } from './security/transport.js';
+export {
+  validateApiOrigin,
+  sanitizeHeaderRecord,
+  assertSafeRequestPath,
+} from './security/transport.js';
+
+export type { SigningConfig } from './security/signing.js';
+
+export type { Hooks, RequestContext, ResponseContext, RetryContext } from './hooks.js';
+export type { Logger } from './logger.js';
+export { NoopLogger } from './logger.js';
 
 export type {
   AgentRecord,

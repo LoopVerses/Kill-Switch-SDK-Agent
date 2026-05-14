@@ -1,8 +1,28 @@
 {
   "name": "@agent-killswitch/sdk-node",
-  "version": "0.3.2",
-  "description": "Production TypeScript SDK for Agent Kill Switch: resource-style API, resilient HTTP, typed errors, telemetry, agents, and kill APIs.",
+  "version": "0.4.0",
+  "description": "Enterprise TypeScript SDK for Agent Kill Switch — resource-style API, resilient HTTP with hooks + logger, typed errors, HMAC request signing, idempotency keys, telemetry, agents, and kill APIs. Runs on Node 20+, Workers, Deno, Bun, Lambda.",
+  "keywords": [
+    "agent",
+    "ai",
+    "kill-switch",
+    "governance",
+    "telemetry",
+    "policy",
+    "sdk",
+    "typescript",
+    "fetch",
+    "hmac",
+    "idempotency",
+    "observability",
+    "opentelemetry",
+    "enterprise"
+  ],
   "license": "MIT",
+  "homepage": "https://github.com/LoopVerses/Kill-Switch-SDK-Agent#readme",
+  "bugs": {
+    "url": "https://github.com/LoopVerses/Kill-Switch-SDK-Agent/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/LoopVerses/Kill-Switch-SDK-Agent.git",
@@ -22,7 +42,13 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
