@@ -54,7 +54,7 @@
     "dev": "tsc -p tsconfig.build.json --watch",
     "lint": "node -e \"process.exit(0)\"",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/client.test.ts",
+    "test": "node --import tsx --test --test-timeout=15000 src/client.test.ts",
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {

@@ -282,21 +282,42 @@ test('logger receives retry events', async () => {
 });
 
 test('per-call timeout overrides client timeout', async () => {
+  // Robust mock: handles the race where the per-call timeout signal may have
+  // already aborted by the time the listener is attached (observed on slower
+  // CI runners). Also unrefs the fallback timer so it never blocks teardown.
   const client = new AgentKillSwitch({
     baseURL: 'http://example.test',
     dangerouslyAllowInsecureHttp: true,
     timeout: 60_000,
     maxRetries: 0,
-    fetchImpl: async (_u, init) =>
-      new Promise<Response>((_, reject) => {
-        init?.signal?.addEventListener('abort', () =>
-          reject(new DOMException('aborted', 'TimeoutError'))
+    fetchImpl: (_u, init) =>
+      new Promise<Response>((resolve, reject) => {
+        const s = init?.signal;
+        const rejectAsTimeout = () =>
+          reject((s?.reason as Error | undefined) ?? new DOMException('aborted', 'TimeoutError'));
+        // Fallback resolver — should never fire because the 50ms timeout
+        // aborts first. Kept as a safety net so the Promise can't hang.
+        const t = setTimeout(() => resolve(new Response('late')), 2_000);
+        (t as unknown as { unref?: () => void }).unref?.();
+        if (!s) return;
+        if (s.aborted) {
+          clearTimeout(t);
+          rejectAsTimeout();
+          return;
+        }
+        s.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(t);
+            rejectAsTimeout();
+          },
+          { once: true }
         );
       }),
   });
   await assert.rejects(
-    () => client.health.check({ timeout: 10 }),
-    (e: unknown) => e instanceof APIUserAbortError && /10ms/.test((e as Error).message)
+    () => client.health.check({ timeout: 50 }),
+    (e: unknown) => e instanceof APIUserAbortError && /50ms/.test((e as Error).message)
   );
 });
 
