@@ -1,7 +1,7 @@
 {
   "name": "@agent-killswitch/sdk-node",
-  "version": "0.2.0",
-  "description": "Production Node.js SDK for Agent Kill Switch: nested resources, resilient HTTP (timeouts, retries, typed errors), telemetry, agents, and kill APIs.",
+  "version": "0.3.0",
+  "description": "Production TypeScript SDK for Agent Kill Switch: resource-style API, resilient HTTP, typed errors, telemetry, agents, and kill APIs.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -26,7 +26,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
-    "lint": "node -e \"process.exit(0)\"",
+    "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test src/client.test.ts",
     "clean": "rimraf dist .turbo"
