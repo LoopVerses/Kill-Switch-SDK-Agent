@@ -2,17 +2,27 @@ import type { ApiErrorBody } from '@agent-killswitch/shared-types';
 
 export type ParsedApiError = Pick<ApiErrorBody, 'code' | 'message' | 'details'>;
 
+/** Best-effort redaction so API error bodies never echo bearer tokens or obvious secrets into Error.message. */
+export function redactSensitiveStrings(input: string): string {
+  let s = input;
+  s = s.replace(/\bBearer\s+[\w\-._~+/]+=*\b/gi, 'Bearer [REDACTED]');
+  s = s.replace(/\bBasic\s+[A-Za-z0-9+/=_-]+\b/gi, 'Basic [REDACTED]');
+  s = s.replace(/\b(?:sk|rk|ks)_(?:live|test)_[A-Za-z0-9]+\b/g, '[REDACTED]');
+  s = s.replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED_JWT]');
+  return s;
+}
+
 function detailToMessage(detail: unknown): string {
-  if (typeof detail === 'string') return detail;
-  if (Array.isArray(detail)) {
-    return detail
+  let raw: string;
+  if (typeof detail === 'string') raw = detail;
+  else if (Array.isArray(detail)) {
+    raw = detail
       .map((e) => (typeof e === 'object' && e && 'msg' in e ? String((e as { msg: unknown }).msg) : String(e)))
       .join('; ');
-  }
-  if (detail && typeof detail === 'object' && 'message' in detail) {
-    return String((detail as { message: unknown }).message);
-  }
-  return JSON.stringify(detail);
+  } else if (detail && typeof detail === 'object' && 'message' in detail) {
+    raw = String((detail as { message: unknown }).message);
+  } else raw = JSON.stringify(detail);
+  return redactSensitiveStrings(raw);
 }
 
 export async function parseErrorBody(res: Response): Promise<ParsedApiError> {
@@ -25,16 +35,16 @@ export async function parseErrorBody(res: Response): Promise<ParsedApiError> {
     if (typeof body.message === 'string') {
       return {
         code: typeof body.code === 'string' ? body.code : `http_${res.status}`,
-        message: body.message,
+        message: redactSensitiveStrings(body.message),
         details: body.details as Record<string, unknown> | undefined,
       };
     }
     if ('detail' in body) {
       return { code: `http_${res.status}`, message: detailToMessage(body.detail) };
     }
-    return { code: `http_${res.status}`, message: raw };
+    return { code: `http_${res.status}`, message: redactSensitiveStrings(raw) };
   } catch {
-    return { code: `http_${res.status}`, message: raw.slice(0, 500) };
+    return { code: `http_${res.status}`, message: redactSensitiveStrings(raw.slice(0, 500)) };
   }
 }
 

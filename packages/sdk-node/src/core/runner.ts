@@ -1,4 +1,5 @@
-import { APIConnectionError, APIUserAbortError, killSwitchErrorFromResponse } from '../errors.js';
+import { APIConnectionError, APIUserAbortError, killSwitchErrorFromResponse, redactSensitiveStrings } from '../errors.js';
+import { assertSafeRequestPath } from '../security/transport.js';
 import { VERSION } from '../version.js';
 import type { RequestCallOptions } from '../resources/types.js';
 
@@ -71,6 +72,7 @@ export class RequestRunner {
       call?: RequestCallOptions;
     },
   ): Promise<Response> {
+    assertSafeRequestPath(path);
     const jsonBody = init?.jsonBody ?? init?.body !== undefined;
     const url = `${this.opts.baseURL}${path}`;
     const body = init?.body !== undefined ? JSON.stringify(init.body) : undefined;
@@ -100,7 +102,7 @@ export class RequestRunner {
           if (init?.call?.signal?.aborted) throw new APIUserAbortError();
           throw new APIUserAbortError('Request timed out');
         }
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = redactSensitiveStrings(e instanceof Error ? e.message : String(e));
         if (attempt < max) {
           await sleep(backoffMs(attempt));
           continue;

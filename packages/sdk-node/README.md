@@ -2,7 +2,7 @@
 
 # Agent Kill Switch — Node.js SDK
 
-[![npm](https://img.shields.io/badge/npm-%40agent--killswitch%2Fsdk--node-0.3.0-CB3837?logo=npm)](https://www.npmjs.com/package/@agent-killswitch/sdk-node)
+[![npm](https://img.shields.io/badge/npm-%40agent--killswitch%2Fsdk--node-0.3.2-CB3837?logo=npm)](https://www.npmjs.com/package/@agent-killswitch/sdk-node)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/LoopVerses/Kill-Switch-SDK-Agent/blob/main/LICENSE)
 [![Node.js](https://img.shields.io/node/v/@agent-killswitch/sdk-node?color=339933&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -25,23 +25,24 @@
 ## Table of contents
 
 1. [Why teams choose this SDK](#why-teams-choose-this-sdk)
-2. [What you can build](#what-you-can-build)
-3. [How it fits your stack](#how-it-fits-your-stack)
-4. [Requirements](#requirements)
-5. [Installation](#installation)
-6. [Quick start](#quick-start)
-7. [Authentication](#authentication)
-8. [Client configuration](#client-configuration)
-9. [Complete API reference](#complete-api-reference)
-10. [Telemetry payloads](#telemetry-payloads)
-11. [Errors & reliability](#errors--reliability)
-12. [Observability](#observability)
-13. [Security & compliance-minded usage](#security--compliance-minded-usage)
-14. [Development & testing](#development--testing)
-15. [Versioning & releases](#versioning--releases)
-16. [FAQ](#faq)
-17. [Acknowledgements](#acknowledgements)
-18. [License](#license)
+2. [Transport & supply-chain security](#transport--supply-chain-security-sdk-enforced)
+3. [What you can build](#what-you-can-build)
+4. [How it fits your stack](#how-it-fits-your-stack)
+5. [Requirements](#requirements)
+6. [Installation](#installation)
+7. [Quick start](#quick-start)
+8. [Authentication](#authentication)
+9. [Client configuration](#client-configuration)
+10. [Complete API reference](#complete-api-reference)
+11. [Telemetry payloads](#telemetry-payloads)
+12. [Errors & reliability](#errors--reliability)
+13. [Observability](#observability)
+14. [Security & compliance-minded usage](#security--compliance-minded-usage)
+15. [Development & testing](#development--testing)
+16. [Versioning & releases](#versioning--releases)
+17. [FAQ](#faq)
+18. [Acknowledgements](#acknowledgements)
+19. [License](#license)
 
 ---
 
@@ -55,6 +56,25 @@
 | **Cancellation** | Every call accepts **`AbortSignal`** — propagate shutdown from Kubernetes, serverless deadlines, or user cancel. |
 | **Minimal footprint** | No heavy runtime beyond **`fetch`** (Node 20+) and a small dependency on **`@agent-killswitch/shared-types`**. |
 | **Enterprise ergonomics** | Versioned **`User-Agent`**, stable **`VERSION` export**, ESM-native, **strict TypeScript** friendly. |
+| **Transport hardening** | **HTTPS-by-default**, explicit **`dangerouslyAllowInsecureHttp`** for dev-only `http:`, **header injection** guards (CR/LF/NUL), **no userinfo** in `baseURL`, **safe request paths**, **secret redaction** in errors. |
+
+---
+
+## Transport & supply-chain security (SDK-enforced)
+
+These checks run **inside your process** before any request is sent. They **do not** replace server auth, WAF, rate limits, or mTLS — they stop whole classes of client misconfiguration and injection so a compromised string is less likely to become a successful exploit.
+
+| Control | Behaviour |
+|---------|-----------|
+| **TLS default** | `baseURL` must be **`https:`** unless **`dangerouslyAllowInsecureHttp: true`** (trusted local dev only). |
+| **No credentials in URL** | `https://user:pass@host` is **rejected** — use **`apiKey`** / **`bearerToken`**. |
+| **No query/fragment on base** | Stops accidental secret leakage via logs, proxies, or referrers. |
+| **Header hygiene** | `defaultHeaders` cannot contain **CR/LF/NUL**; reasonable length caps apply. |
+| **Credential hygiene** | `apiKey` / `bearerToken` cannot contain CR/LF/NUL. |
+| **Path hardening** | Request paths must start with **`/`**, cannot contain **`..`** or **`://`**. |
+| **Redaction** | API error messages and transport diagnostics pass **`redactSensitiveStrings`** (Bearer, Basic, `sk_*` / `ks_*`-style tokens, JWT-shaped blobs). |
+
+**`@agent-killswitch/agentwatch-node`** applies the same model to **`baseUrl`** (with **`dangerouslyAllowInsecureHttp`** for local `http://`), sanitizes merged headers, and redacts ingest failure text.
 
 ---
 
@@ -225,6 +245,7 @@ Optional **`defaultHeaders`** merge **after** built-in headers — useful for in
 | `defaultHeaders` | `Record<string, string>` | `{}` | Extra headers on **every** request. |
 | `timeout` | `number` | `60000` | Client-side per-request timeout (**ms**). Use **`0`** to disable (still respects **`signal`**). |
 | `maxRetries` | `number` | `2` | **Additional** attempts after the first for retriable HTTP statuses and connection errors. |
+| `dangerouslyAllowInsecureHttp` | `boolean` | `false` | If **`true`**, allows **`http://`** `baseURL` (local dev only). **Never** enable in production. |
 
 Every resource method accepts an optional trailing **`RequestCallOptions`**: `{ signal?: AbortSignal }`.
 

@@ -1,10 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import AgentKillSwitch, { KillSwitchClient, AuthenticationError } from './index.ts';
+import AgentKillSwitch, {
+  KillSwitchClient,
+  AuthenticationError,
+  KillSwitchError,
+  KillSwitchApiError,
+} from './index.ts';
 
 test('KillSwitchClient alias works and getLastKill returns null on 404', async () => {
   const client = new KillSwitchClient({
     baseUrl: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
     maxRetries: 0,
     fetchImpl: async () => new Response(null, { status: 404 }),
   });
@@ -16,6 +22,7 @@ test('nested kill.latest uses /agents/:ref/kill/latest', async () => {
   let url = '';
   const client = new AgentKillSwitch({
     baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
     maxRetries: 0,
     fetchImpl: async (u) => {
       url = String(u);
@@ -33,6 +40,7 @@ test('nested kill.latest uses /agents/:ref/kill/latest', async () => {
 test('KillSwitchApiError path: 401 becomes AuthenticationError', async () => {
   const client = new AgentKillSwitch({
     baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
     maxRetries: 0,
     fetchImpl: async () =>
       new Response(JSON.stringify({ detail: 'invalid_api_key' }), {
@@ -52,6 +60,7 @@ test('telemetry.sendBatch posts JSON and sends User-Agent', async () => {
   let ua = '';
   const client = new AgentKillSwitch({
     baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
     apiKey: 'sk_test',
     maxRetries: 0,
     fetchImpl: async (u, init) => {
@@ -74,6 +83,7 @@ test('retries on 503 then succeeds', async () => {
   let n = 0;
   const client = new AgentKillSwitch({
     baseURL: 'http://example.test',
+    dangerouslyAllowInsecureHttp: true,
     apiKey: 'k',
     maxRetries: 2,
     timeout: 5000,
@@ -86,4 +96,49 @@ test('retries on 503 then succeeds', async () => {
   const out = await client.telemetry.sendBatch([{ a: 1 }]);
   assert.equal(n, 2);
   assert.equal(out.accepted, 1);
+});
+
+test('http baseURL rejected unless dangerouslyAllowInsecureHttp', () => {
+  assert.throws(
+    () =>
+      new AgentKillSwitch({
+        baseURL: 'http://example.test',
+        maxRetries: 0,
+        fetchImpl: async () => new Response(null, { status: 404 }),
+      }),
+    (e: unknown) => e instanceof KillSwitchError,
+  );
+});
+
+test('credentials in baseURL rejected', () => {
+  assert.throws(
+    () =>
+      new AgentKillSwitch({
+        baseURL: 'https://user:pass@api.example.com',
+        fetchImpl: async () => new Response(null),
+      }),
+    (e: unknown) => e instanceof KillSwitchError,
+  );
+});
+
+test('header CRLF rejected', () => {
+  assert.throws(
+    () =>
+      new AgentKillSwitch({
+        baseURL: 'https://api.example.com',
+        defaultHeaders: { 'X-Evil': 'a\r\nInjected: 1' },
+        fetchImpl: async () => new Response(null),
+      }),
+    (e: unknown) => e instanceof KillSwitchError,
+  );
+});
+
+test('API error message redacts Bearer token', async () => {
+  const res = new Response(JSON.stringify({ message: 'fail Bearer sk_live_abc123secret' }), {
+    status: 400,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const err = await KillSwitchApiError.fromResponse(res);
+  assert.ok(!err.message.includes('sk_live'));
+  assert.ok(err.message.includes('[REDACTED]'));
 });

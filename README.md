@@ -2,7 +2,7 @@
 
 # Kill Switch SDK Agent
 
-[![npm](https://img.shields.io/badge/npm-%40agent--killswitch%2Fsdk--node-0.3.0-CB3837?logo=npm)](https://www.npmjs.com/package/@agent-killswitch/sdk-node)
+[![npm](https://img.shields.io/badge/npm-%40agent--killswitch%2Fsdk--node-0.3.2-CB3837?logo=npm)](https://www.npmjs.com/package/@agent-killswitch/sdk-node)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/LoopVerses/Kill-Switch-SDK-Agent/ci.yml?branch=main&label=CI)](https://github.com/LoopVerses/Kill-Switch-SDK-Agent/actions)
 
@@ -20,7 +20,7 @@
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| [`@agent-killswitch/sdk-node`](./packages/sdk-node/) | **0.3.0** | HTTP client for the control plane. |
+| [`@agent-killswitch/sdk-node`](./packages/sdk-node/) | **0.3.2** | HTTP client for the control plane. |
 | [`@agent-killswitch/shared-types`](./packages/shared-types/) | **0.3.0** | Shared TypeScript DTOs. |
 
 ---

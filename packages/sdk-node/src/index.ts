@@ -26,9 +26,12 @@ export {
   APIConnectionError,
   APIUserAbortError,
   parseErrorBody,
+  redactSensitiveStrings,
 } from './errors.js';
 
 export type { ParsedApiError } from './errors.js';
+
+export { validateApiOrigin, sanitizeHeaderRecord, assertSafeRequestPath } from './security/transport.js';
 
 export type {
   AgentRecord,

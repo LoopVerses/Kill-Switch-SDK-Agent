@@ -1,6 +1,6 @@
 {
   "name": "@agent-killswitch/sdk-node",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "Production TypeScript SDK for Agent Kill Switch: resource-style API, resilient HTTP, typed errors, telemetry, agents, and kill APIs.",
   "license": "MIT",
   "repository": {
