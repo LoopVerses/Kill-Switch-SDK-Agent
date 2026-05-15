@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./docs/assets/developer-portal.png" alt="Agent Kill Switch developer portal — docs, API explorer, sandbox playground, and live status" width="920" />
+</p>
+
 <div align="center">
 
 # Kill Switch SDK Agent
